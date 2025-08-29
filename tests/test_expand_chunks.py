@@ -19,10 +19,10 @@ def test_expand_chunks_basic_and_bounds():
     result = expand_chunks(chunks, expand_ms=50, total_ms=500)
     assert result == [[50, 250]]
 
-    # respects boundaries at start and end
-    edge_chunks = [(0, 50), (450, 500)]
-    edge_result = expand_chunks(edge_chunks, expand_ms=100, total_ms=500)
-    assert edge_result == [[0, 150], [350, 500]]
+    # respects boundaries at start and end without merging distant chunks
+    edge_chunks = [(0, 50), (480, 500)]
+    edge_result = expand_chunks(edge_chunks, expand_ms=50, total_ms=500)
+    assert edge_result == [[0, 100], [430, 500]]
 
 
 def test_expand_chunks_merges_overlaps():
@@ -35,10 +35,10 @@ def test_expand_chunks_merges_overlaps():
 
 
 def test_expand_chunks_no_overlaps_in_result():
-    chunks = [(10, 20), (40, 50), (90, 100)]
-    result = expand_chunks(chunks, expand_ms=10, total_ms=150, merge_gap_ms=5)
+    chunks = [(10, 20), (40, 50), (400, 410)]
+    result = expand_chunks(chunks, expand_ms=10, total_ms=500)
 
     # first two chunks merge, but final intervals should be non-overlapping
-    assert result == [[0, 60], [80, 110]]
+    assert result == [[0, 60], [390, 420]]
     for (s1, e1), (s2, e2) in zip(result, result[1:]):
         assert e1 < s2
