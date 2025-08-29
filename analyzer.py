@@ -145,7 +145,15 @@ def percentile(values, p):
     return s[f] + (s[c] - s[f]) * (k - f)
 
 def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
-    """Возвращает (times_sec, rms_dbfs). times — центр окна в секундах."""
+    """Возвращает ``(times_sec, rms_dbfs)``.
+
+    * ``times_sec`` — центр окна в секундах;
+    * ``rms_dbfs`` — уровень сигнала, выраженный в dBFS.
+
+    Параметры ``win_ms`` и ``hop_ms`` задаются в миллисекундах и по умолчанию
+    равны ``50`` ms. Значения по умолчанию отличаются от глобальных
+    констант ``WIN_MS`` и ``HOP_MS`` (``25`` ms).
+    """
     n = max(1, math.ceil((len(audio) - win_ms) / hop_ms) + 1)
     times, rms_dbfs = [], []
     for i in range(n):
