@@ -205,15 +205,18 @@ def pad_and_merge(chunks, pad_ms, merge_gap_ms=0):
     return merged
 
 def expand_chunks(chunks, expand_ms, total_ms, merge_gap_ms=0):
-    """Добавляет по expand_ms с каждой стороны (после склейки) и объединяет перекрытия."""
-    if not chunks or expand_ms <= 0:
-        return chunks
-    out = []
+    """Добавляет по ``expand_ms`` с каждой стороны и объединяет перекрытия."""
+    if not chunks:
+        return []
+
+    expanded = []
     for s, e in chunks:
-        s2 = max(0, s - expand_ms)
-        e2 = min(total_ms, e + expand_ms)
-        out.append([s2, e2])
-    return pad_and_merge(out, pad_ms=0, merge_gap_ms=merge_gap_ms)
+        if expand_ms > 0:
+            s = max(0, s - expand_ms)
+            e = min(total_ms, e + expand_ms)
+        expanded.append([s, e])
+
+    return pad_and_merge(expanded, pad_ms=0, merge_gap_ms=merge_gap_ms)
 
 # ===================== FFmpeg =====================
 
