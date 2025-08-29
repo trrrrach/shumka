@@ -46,7 +46,7 @@ ARCHIVE_RESULTS = True              # упаковать подпапку каж
 DELETE_RESULT_DIR_AFTER_ZIP = True  # удалить подпапку после упаковки (оставить только ZIP)
 
 # Режим нарезки видео:
-#  - "fast_copy": без перекодирования (очень быстро), выход .avi, границы по ключкадрам
+#  - "fast_copy": без перекодирования (очень быстро), выход .avi, границы по ключевым кадрам
 #  - "h264":      перекодирование в .mp4 (точнее/совместимее), медленнее
 SEGMENT_MODE  = "fast_copy"
 FAST_MODE     = True       # быстрый seek (-ss до -i): быстрее, но границы менее точные
@@ -145,9 +145,9 @@ def percentile(values, p):
     return s[f] + (s[c] - s[f]) * (k - f)
 
 def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
-    """Возвращает (times_sec, rms_db). times — центр окна в секундах."""
+    """Возвращает (times_sec, rms_dbfs). times — центр окна в секундах."""
     n = max(1, math.ceil((len(audio) - win_ms) / hop_ms) + 1)
-    times, rms_db = [], []
+    times, rms_dbfs = [], []
     for i in range(n):
         start = i * hop_ms
         end = min(len(audio), start + win_ms)
@@ -155,8 +155,8 @@ def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
         rms = seg.rms or 1
         dbfs = 20 * math.log10(rms / (seg.max_possible_amplitude or 1))
         times.append((start + end) / 2000.0)
-        rms_db.append(dbfs)
-    return times, rms_db
+        rms_dbfs.append(dbfs)
+    return times, rms_dbfs
 
 def detect_exceedances(rms_db, hop_ms, baseline_db, delta_db, hyst_db, min_event_ms):
     up_th = baseline_db + delta_db
@@ -263,7 +263,7 @@ def ffmpeg_cut_h264(input_path: str, output_path: str, start_s: float, end_s: fl
     run_ffmpeg(cmd, "cut_h264")
 
 def ffmpeg_cut_copy(input_path: str, output_path: str, start_s: float, end_s: float):
-    """Нарезка без перекодирования (очень быстро). Выход .avi. Границы — по ключкадрам."""
+    """Нарезка без перекодирования (очень быстро). Выход .avi. Границы — по ключевым кадрам."""
     cmd = [
         "ffmpeg", "-hide_banner", "-y",
         "-ss", f"{start_s}",
@@ -325,11 +325,15 @@ def collect_worklist_from_rar(rar_path, seven_zip_exe):
 
 def extract_one_from_zip(zip_path, arcname):
     tmp_dir = tempfile.mkdtemp(prefix="vid_extract_")
-    out_path = os.path.join(tmp_dir, os.path.basename(arcname))
-    with ZipFile(zip_path, "r") as zf:
-        with zf.open(arcname) as src, open(out_path, "wb") as dst:
-            shutil.copyfileobj(src, dst)
-    return out_path, tmp_dir
+    try:
+        out_path = os.path.join(tmp_dir, os.path.basename(arcname))
+        with ZipFile(zip_path, "r") as zf:
+            with zf.open(arcname) as src, open(out_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        return out_path, tmp_dir
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
 def extract_one_from_rar(rar_path, arcname, seven_zip_exe):
     tmp_dir = tempfile.mkdtemp(prefix="vid_extract_")
