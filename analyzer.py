@@ -202,7 +202,7 @@ def pad_and_merge(chunks, pad_ms, merge_gap_ms=0):
             merged.append([s, e])
     return merged
 
-def expand_chunks(chunks, expand_ms, total_ms, merge_gap_ms=0):
+def expand_chunks(chunks, expand_ms, total_ms):
     """Добавляет по ``expand_ms`` с каждой стороны и объединяет перекрытия."""
     if not chunks:
         return []
@@ -214,7 +214,7 @@ def expand_chunks(chunks, expand_ms, total_ms, merge_gap_ms=0):
             e = min(total_ms, e + expand_ms)
         out.append([s, e])
 
-    return pad_and_merge(out, 0, merge_gap_ms)
+    return pad_and_merge(out, 0, MERGE_GAP_MS)
 
 # ===================== FFmpeg =====================
 
@@ -540,7 +540,7 @@ def main():
             # Поля и склейка
             events = pad_and_merge(events, KEEP_SILENCE_MS, MERGE_GAP_MS)
             # Доп. удлинение после склейки
-            events = expand_chunks(events, EXTRA_EVENT_EXPAND_MS, total_ms=len(audio), merge_gap_ms=MERGE_GAP_MS)
+            events = expand_chunks(events, EXTRA_EVENT_EXPAND_MS, total_ms=len(audio))
 
             if not events and rms_dbfs:
                 max_i = max(range(len(rms_dbfs)), key=lambda i: rms_dbfs[i])
