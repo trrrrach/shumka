@@ -279,7 +279,7 @@ def ffmpeg_cut_copy(input_path: str, output_path: str, start_s: float, end_s: fl
 # ===================== Архивирование =====================
 
 def zip_dir(src_dir: str, zip_path: str):
-    """Запаковать содержимое папки src_dir в zip_path."""
+    """Упаковать содержимое папки src_dir в zip_path."""
     with ZipFile(zip_path, "w", compression=ZIP_DEFLATED, compresslevel=6) as zf:
         for root, _, files in os.walk(src_dir):
             for fn in files:
