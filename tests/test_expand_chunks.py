@@ -30,3 +30,13 @@ def test_expand_chunks_merges_overlaps():
     # expanding by 30ms causes the ranges to overlap
     result = expand_chunks(chunks, expand_ms=30, total_ms=500)
     assert result == [[70, 240]]
+
+
+def test_expand_chunks_no_overlaps_in_result():
+    chunks = [(10, 20), (40, 50), (90, 100)]
+    result = expand_chunks(chunks, expand_ms=10, total_ms=150, merge_gap_ms=5)
+
+    # first two chunks merge, but final intervals should be non-overlapping
+    assert result == [[0, 60], [80, 110]]
+    for (s1, e1), (s2, e2) in zip(result, result[1:]):
+        assert e1 < s2
