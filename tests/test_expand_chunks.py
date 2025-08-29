@@ -26,10 +26,12 @@ def test_expand_chunks_basic_and_bounds():
 
 
 def test_expand_chunks_merges_overlaps():
-    chunks = [(100, 150), (160, 210)]
-    # expanding by 30ms causes the ranges to overlap
-    result = expand_chunks(chunks, expand_ms=30, total_ms=500)
-    assert result == [[70, 240]]
+    # three chunks that are separated but become overlapping after expansion
+    chunks = [(100, 150), (160, 210), (220, 270)]
+
+    # expanding by 40ms causes all ranges to overlap forming a single interval
+    result = expand_chunks(chunks, expand_ms=40, total_ms=500)
+    assert result == [[60, 310]]
 
 
 def test_expand_chunks_no_overlaps_in_result():
