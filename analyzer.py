@@ -208,14 +208,14 @@ def expand_chunks(chunks, expand_ms, total_ms, merge_gap_ms=0):
     if not chunks:
         return []
 
-    expanded = []
+    out = []
     for s, e in chunks:
         if expand_ms > 0:
             s = max(0, s - expand_ms)
             e = min(total_ms, e + expand_ms)
-        expanded.append([s, e])
+        out.append([s, e])
 
-    return pad_and_merge(expanded, pad_ms=0, merge_gap_ms=merge_gap_ms)
+    return pad_and_merge(out, 0, 0)
 
 # ===================== FFmpeg =====================
 
