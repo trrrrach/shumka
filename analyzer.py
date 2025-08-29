@@ -158,13 +158,13 @@ def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
         rms_dbfs.append(dbfs)
     return times, rms_dbfs
 
-def detect_exceedances(rms_db, hop_ms, baseline_db, delta_db, hyst_db, min_event_ms):
+def detect_exceedances(rms_dbfs, hop_ms, baseline_db, delta_db, hyst_db, min_event_ms):
     up_th = baseline_db + delta_db
     down_th = up_th - hyst_db
     events = []
     in_evt = False
     evt_start_idx = None
-    for i, val in enumerate(rms_db):
+    for i, val in enumerate(rms_dbfs):
         if not in_evt and val > up_th:
             in_evt = True
             evt_start_idx = i
@@ -177,7 +177,7 @@ def detect_exceedances(rms_db, hop_ms, baseline_db, delta_db, hyst_db, min_event
             evt_start_idx = None
     if in_evt and evt_start_idx is not None:
         start_ms = evt_start_idx * hop_ms
-        end_ms = len(rms_db) * hop_ms
+        end_ms = len(rms_dbfs) * hop_ms
         if (end_ms - start_ms) >= min_event_ms:
             events.append([start_ms, end_ms])
     return events
@@ -337,9 +337,13 @@ def extract_one_from_zip(zip_path, arcname):
 
 def extract_one_from_rar(rar_path, arcname, seven_zip_exe):
     tmp_dir = tempfile.mkdtemp(prefix="vid_extract_")
-    subprocess.run([seven_zip_exe, "e", "-y", rar_path, arcname, f"-o{tmp_dir}"], check=True)
-    out_path = os.path.join(tmp_dir, os.path.basename(arcname))
-    return out_path, tmp_dir
+    try:
+        subprocess.run([seven_zip_exe, "e", "-y", rar_path, arcname, f"-o{tmp_dir}"], check=True)
+        out_path = os.path.join(tmp_dir, os.path.basename(arcname))
+        return out_path, tmp_dir
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
 # ===================== Системные датчики (поток) =====================
 
@@ -494,7 +498,7 @@ def main():
 
             log("[analyze] Считаю кратковременный уровень (RMS)")
             audio = AudioSegment.from_wav(original_wav).set_channels(1)
-            times_sec, rms_db = short_time_rms_dbfs(audio, WIN_MS, HOP_MS)
+            times_sec, rms_dbfs = short_time_rms_dbfs(audio, WIN_MS, HOP_MS)
 
             # Бейзлайн
             if CALIBRATION_SEC > 0:
@@ -504,10 +508,10 @@ def main():
                 baseline_src = f"first {CALIBRATION_SEC}s (median)"
             else:
                 if BASELINE_METHOD.lower() == "median":
-                    baseline_db = median(rms_db) if rms_db else -60.0
+                    baseline_db = median(rms_dbfs) if rms_dbfs else -60.0
                     baseline_src = "global median"
                 else:
-                    baseline_db = percentile(rms_db, 20) if rms_db else -60.0
+                    baseline_db = percentile(rms_dbfs, 20) if rms_dbfs else -60.0
                     baseline_src = "global p20"
 
             up_th = baseline_db + THRESH_DELTA_DB
@@ -516,7 +520,7 @@ def main():
             # Детекция
             log("[detect] Ищу превышения над порогом…")
             events = detect_exceedances(
-                rms_db=rms_db,
+                rms_dbfs=rms_dbfs,
                 hop_ms=HOP_MS,
                 baseline_db=baseline_db,
                 delta_db=THRESH_DELTA_DB,
@@ -529,14 +533,14 @@ def main():
             # Доп. удлинение после склейки
             events = expand_chunks(events, EXTRA_EVENT_EXPAND_MS, total_ms=len(audio))
 
-            if not events and rms_db:
-                max_i = max(range(len(rms_db)), key=lambda i: rms_db[i])
+            if not events and rms_dbfs:
+                max_i = max(range(len(rms_dbfs)), key=lambda i: rms_dbfs[i])
                 center_ms = max_i * HOP_MS
                 half = int(FALLBACK_SEC * 1000 / 2)
                 start_ms = max(0, center_ms - half)
                 end_ms = min(len(audio), center_ms + half)
                 events = [[start_ms, end_ms]]
-                log("[detect] событий не найдено — сохранен самый громкий ~2с сегмент (fallback)")
+                log("[detect] событий не найдено — сохранён самый громкий ~2с сегмент (fallback)")
 
             log(f"[export] Найдено событий: {len(events)} — начинаю экспорт аудио/видео и таймкодов")
             tc_path = os.path.join(out_dir, "timecodes.txt")
