@@ -46,7 +46,7 @@ ARCHIVE_RESULTS = True              # упаковать подпапку каж
 DELETE_RESULT_DIR_AFTER_ZIP = True  # удалить подпапку после упаковки (оставить только ZIP)
 
 # Режим нарезки видео:
-#  - "fast_copy": без перекодирования (очень быстро), выход .avi, границы по ключкадрам
+#  - "fast_copy": без перекодирования (очень быстро), выход .avi, границы по ключевым кадрам
 #  - "h264":      перекодирование в .mp4 (точнее/совместимее), медленнее
 SEGMENT_MODE  = "fast_copy"
 FAST_MODE     = True       # быстрый seek (-ss до -i): быстрее, но границы менее точные
@@ -145,9 +145,9 @@ def percentile(values, p):
     return s[f] + (s[c] - s[f]) * (k - f)
 
 def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
-    """Возвращает (times_sec, rms_db). times — центр окна в секундах."""
+    """Возвращает (times_sec, rms_dbfs). times — центр окна в секундах."""
     n = max(1, math.ceil((len(audio) - win_ms) / hop_ms) + 1)
-    times, rms_db = [], []
+    times, rms_dbfs = [], []
     for i in range(n):
         start = i * hop_ms
         end = min(len(audio), start + win_ms)
@@ -155,16 +155,16 @@ def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
         rms = seg.rms or 1
         dbfs = 20 * math.log10(rms / (seg.max_possible_amplitude or 1))
         times.append((start + end) / 2000.0)
-        rms_db.append(dbfs)
-    return times, rms_db
+        rms_dbfs.append(dbfs)
+    return times, rms_dbfs
 
-def detect_exceedances(rms_db, hop_ms, baseline_db, delta_db, hyst_db, min_event_ms):
+def detect_exceedances(rms_dbfs, hop_ms, baseline_db, delta_db, hyst_db, min_event_ms):
     up_th = baseline_db + delta_db
     down_th = up_th - hyst_db
     events = []
     in_evt = False
     evt_start_idx = None
-    for i, val in enumerate(rms_db):
+    for i, val in enumerate(rms_dbfs):
         if not in_evt and val > up_th:
             in_evt = True
             evt_start_idx = i
@@ -177,7 +177,7 @@ def detect_exceedances(rms_db, hop_ms, baseline_db, delta_db, hyst_db, min_event
             evt_start_idx = None
     if in_evt and evt_start_idx is not None:
         start_ms = evt_start_idx * hop_ms
-        end_ms = len(rms_db) * hop_ms
+        end_ms = len(rms_dbfs) * hop_ms
         if (end_ms - start_ms) >= min_event_ms:
             events.append([start_ms, end_ms])
     return events
@@ -263,7 +263,7 @@ def ffmpeg_cut_h264(input_path: str, output_path: str, start_s: float, end_s: fl
     run_ffmpeg(cmd, "cut_h264")
 
 def ffmpeg_cut_copy(input_path: str, output_path: str, start_s: float, end_s: float):
-    """Нарезка без перекодирования (очень быстро). Выход .avi. Границы — по ключкадрам."""
+    """Нарезка без перекодирования (очень быстро). Выход .avi. Границы — по ключевым кадрам."""
     cmd = [
         "ffmpeg", "-hide_banner", "-y",
         "-ss", f"{start_s}",
@@ -325,17 +325,25 @@ def collect_worklist_from_rar(rar_path, seven_zip_exe):
 
 def extract_one_from_zip(zip_path, arcname):
     tmp_dir = tempfile.mkdtemp(prefix="vid_extract_")
-    out_path = os.path.join(tmp_dir, os.path.basename(arcname))
-    with ZipFile(zip_path, "r") as zf:
-        with zf.open(arcname) as src, open(out_path, "wb") as dst:
-            shutil.copyfileobj(src, dst)
-    return out_path, tmp_dir
+    try:
+        out_path = os.path.join(tmp_dir, os.path.basename(arcname))
+        with ZipFile(zip_path, "r") as zf:
+            with zf.open(arcname) as src, open(out_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        return out_path, tmp_dir
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
 def extract_one_from_rar(rar_path, arcname, seven_zip_exe):
     tmp_dir = tempfile.mkdtemp(prefix="vid_extract_")
-    subprocess.run([seven_zip_exe, "e", "-y", rar_path, arcname, f"-o{tmp_dir}"], check=True)
-    out_path = os.path.join(tmp_dir, os.path.basename(arcname))
-    return out_path, tmp_dir
+    try:
+        subprocess.run([seven_zip_exe, "e", "-y", rar_path, arcname, f"-o{tmp_dir}"], check=True)
+        out_path = os.path.join(tmp_dir, os.path.basename(arcname))
+        return out_path, tmp_dir
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
 # ===================== Системные датчики (поток) =====================
 
@@ -394,6 +402,10 @@ def main():
     seven_zip_exe = args.seven_zip
     segment_mode = args.segment_mode
     out_mode = args.output_mode
+
+    if not os.path.exists(source):
+        loge(f"Источник не найден: {source}")
+        return
 
     # Построим корневую папку результата и подключим лог-файл
     output_root = build_output_root(BASE_OUTPUT, out_mode)
@@ -490,7 +502,7 @@ def main():
 
             log("[analyze] Считаю кратковременный уровень (RMS)")
             audio = AudioSegment.from_wav(original_wav).set_channels(1)
-            times_sec, rms_db = short_time_rms_dbfs(audio, WIN_MS, HOP_MS)
+            times_sec, rms_dbfs = short_time_rms_dbfs(audio, WIN_MS, HOP_MS)
 
             # Бейзлайн
             if CALIBRATION_SEC > 0:
@@ -500,10 +512,10 @@ def main():
                 baseline_src = f"first {CALIBRATION_SEC}s (median)"
             else:
                 if BASELINE_METHOD.lower() == "median":
-                    baseline_db = median(rms_db) if rms_db else -60.0
+                    baseline_db = median(rms_dbfs) if rms_dbfs else -60.0
                     baseline_src = "global median"
                 else:
-                    baseline_db = percentile(rms_db, 20) if rms_db else -60.0
+                    baseline_db = percentile(rms_dbfs, 20) if rms_dbfs else -60.0
                     baseline_src = "global p20"
 
             up_th = baseline_db + THRESH_DELTA_DB
@@ -512,7 +524,7 @@ def main():
             # Детекция
             log("[detect] Ищу превышения над порогом…")
             events = detect_exceedances(
-                rms_db=rms_db,
+                rms_dbfs=rms_dbfs,
                 hop_ms=HOP_MS,
                 baseline_db=baseline_db,
                 delta_db=THRESH_DELTA_DB,
@@ -525,14 +537,14 @@ def main():
             # Доп. удлинение после склейки
             events = expand_chunks(events, EXTRA_EVENT_EXPAND_MS, total_ms=len(audio))
 
-            if not events and rms_db:
-                max_i = max(range(len(rms_db)), key=lambda i: rms_db[i])
+            if not events and rms_dbfs:
+                max_i = max(range(len(rms_dbfs)), key=lambda i: rms_dbfs[i])
                 center_ms = max_i * HOP_MS
                 half = int(FALLBACK_SEC * 1000 / 2)
                 start_ms = max(0, center_ms - half)
                 end_ms = min(len(audio), center_ms + half)
                 events = [[start_ms, end_ms]]
-                log("[detect] событий не найдено — сохранен самый громкий ~2с сегмент (fallback)")
+                log("[detect] событий не найдено — сохранён самый громкий ~2с сегмент (fallback)")
 
             log(f"[export] Найдено событий: {len(events)} — начинаю экспорт аудио/видео и таймкодов")
             tc_path = os.path.join(out_dir, "timecodes.txt")
