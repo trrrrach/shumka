@@ -23,3 +23,10 @@ def test_expand_chunks_basic_and_bounds():
     edge_chunks = [(0, 50), (450, 500)]
     edge_result = expand_chunks(edge_chunks, expand_ms=100, total_ms=500)
     assert edge_result == [[0, 150], [350, 500]]
+
+
+def test_expand_chunks_merges_overlaps():
+    chunks = [(100, 150), (160, 210)]
+    # expanding by 30ms causes the ranges to overlap
+    result = expand_chunks(chunks, expand_ms=30, total_ms=500)
+    assert result == [[70, 240]]
