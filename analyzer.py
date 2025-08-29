@@ -215,7 +215,7 @@ def expand_chunks(chunks, expand_ms, total_ms, merge_gap_ms=0):
             e = min(total_ms, e + expand_ms)
         out.append([s, e])
 
-    return pad_and_merge(out, 0, 0)
+    return pad_and_merge(out, 0, merge_gap_ms)
 
 # ===================== FFmpeg =====================
 
