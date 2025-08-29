@@ -2,13 +2,12 @@ import os
 import sys
 import pytest
 
+# Ensure analyzer can import even without real pydub dependency
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Provide a minimal stub for pydub to satisfy analyzer imports during tests
 import types
 pydub_stub = types.ModuleType("pydub")
 
-class AudioSegment:
+class AudioSegment:  # pragma: no cover - minimal stub
     pass
 
 pydub_stub.AudioSegment = AudioSegment
@@ -18,6 +17,7 @@ from analyzer import detect_exceedances
 
 
 def test_detect_exceedances_handles_hysteresis_and_open_end():
+    """detect_exceedances should close open events at list end"""
     rms_dbfs = [0, 1, 4, 3.5, 2.5, 1, 0, 4, 5, 4]
     hop_ms = 100
     baseline_db = 0
