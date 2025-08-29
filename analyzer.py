@@ -148,10 +148,9 @@ def short_time_rms_dbfs(audio: AudioSegment, win_ms=50, hop_ms=50):
     """Возвращает ``(times_sec, rms_dbfs)``.
 
     * ``times_sec`` — центр окна в секундах;
-    * ``rms_dbfs`` — уровень сигнала в dBFS.
+    * ``rms_dbfs`` — уровень сигнала в децибелах относительно полного масштаба (dBFS).
 
-    ``win_ms`` и ``hop_ms`` задаются в миллисекундах,
-    по умолчанию равны ``50`` ms.
+    Параметры ``win_ms`` и ``hop_ms`` измеряются в миллисекундах (по умолчанию по ``50`` ms).
     """
     n = max(1, math.ceil((len(audio) - win_ms) / hop_ms) + 1)
     times, rms_dbfs = [], []
